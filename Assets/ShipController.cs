@@ -3,13 +3,20 @@ using System.Collections;
 
 public class ShipController : MonoBehaviour {
 
-	Vector3 desiredVelocity= Vector3.zero;
+	Vector3 desiredVelocity = Vector3.zero;
 	Vector3 desiredForceToApply = Vector3.zero;
-	Vector3 forceToApply = Vector3.zero;
+	Vector3 forceToApplyLinear = Vector3.zero;
 
+	Vector3 desiredVelocityPerpendicular = Vector3.zero;
+	Vector3 desiredForceToApplyPerpendicular = Vector3.zero;
+	Vector3 forceToApplyPerpendicular = Vector3.zero;
+
+	public float maxVelocity = 5f;
 	public float maxVerticalVelocity = 1f;
 	public float maxHorizontalVelocity = 1f;
-	public float maxTotalForce = 1f;
+
+	public float maxLinealForce = 5f;
+	public float maxTotalForcePerpendicular = 1f;
 
 	//----------------------------------
 
@@ -47,7 +54,8 @@ public class ShipController : MonoBehaviour {
 	
 	void Update () 
 	{
-		movePlanar ();
+		move ();
+		movePerpendicular ();
 		rotateYaw ();
 		rotatePitch ();
 		rotateRoll ();
@@ -57,39 +65,70 @@ public class ShipController : MonoBehaviour {
 	void OnDrawGizmos ()
 	{
 		Gizmos.color = Color.blue;
-		Debug.DrawLine(transform.position, (transform.position + Vector3.right * forceToApply.x/3000f + Vector3.forward * forceToApply.z/3000f + Vector3.up * forceToApply.y/3000f), Color.blue);
-		Gizmos.DrawWireSphere(transform.position, maxTotalForce/3000f);
+		Debug.DrawLine(transform.position, (transform.position + Vector3.right * forceToApplyPerpendicular.x/3000f + Vector3.forward * forceToApplyPerpendicular.z/3000f + Vector3.up * forceToApplyPerpendicular.y/3000f), Color.blue);
+		Gizmos.DrawWireSphere(transform.position, maxTotalForcePerpendicular/8000f);
+
+		Gizmos.color = Color.red;
+		Debug.DrawLine(transform.position, (transform.position + forceToApplyLinear/5000f), Color.red);
+	
 	}
 
 	void FixedUpdate ()
 	{
-		_rigidbody.AddForce(forceToApply);
+		_rigidbody.AddForce(forceToApplyPerpendicular + forceToApplyLinear);
 		_rigidbody.AddRelativeTorque(Vector3.up * torqueToApplyYaw + Vector3.right * torqueToApplyPitch + Vector3.forward * torqueToApplyRoll);
 	}
 
-	void movePlanar ()
+	void move ()
 	{
-		//Planar displacement ----------------
-		
-		forceToApply = Vector3.zero;
-		desiredForceToApply = Vector3.zero;
-		
-		//Take the input to calculate desired velocity.
-		desiredVelocity = (transform.right * Input.GetAxis("Horizontal") * maxHorizontalVelocity) + (transform.up * Input.GetAxis("Vertical") * maxVerticalVelocity);
-		
-		//Calculate the force to apply needed to reach the desired velocity:
+		//Linear displacement ----------------
 
-		Vector3 aux = (desiredVelocity - _rigidbody.velocity);
+		forceToApplyLinear = Vector3.zero;
+		desiredForceToApply = Vector3.zero;
+
+		desiredVelocity = transform.forward * Input.GetAxis ("RT") * maxVelocity - transform.forward * Input.GetAxis ("LT") * maxVelocity;
+		//Debug.Log(desiredVelocity);
+
+		Vector3 aux = (desiredVelocity - Vector3.Project(_rigidbody.velocity, transform.forward));
 		aux = _rigidbody.mass * aux;
 		aux = aux / Time.fixedDeltaTime;
 		desiredForceToApply += aux * 2f;
+
+		//Clamp the total force to respect the the maxForce parameter once projected onto the plane.
+		forceToApplyLinear = Vector3.ClampMagnitude(desiredForceToApply, maxLinealForce);
+
+
+	}
+
+	void movePerpendicular ()
+	{
+		//Perpendicular displacement ----------------
+		
+		forceToApplyPerpendicular = Vector3.zero;
+		desiredForceToApplyPerpendicular = Vector3.zero;
+		
+		//Take the input to calculate desired velocity.
+		desiredVelocityPerpendicular = (transform.right * Input.GetAxis("Horizontal2") * maxHorizontalVelocity) + (transform.up * Input.GetAxis("Vertical2") * maxVerticalVelocity);
+		
+		//Calculate the force to apply needed to reach the desired velocity:
+
+		Vector3 aux = (desiredVelocityPerpendicular - _rigidbody.velocity);
+		aux = _rigidbody.mass * aux;
+		aux = aux / Time.fixedDeltaTime;
+		desiredForceToApplyPerpendicular += aux * 2f;
 		//desiredForceToApply += (_rigidbody.mass * (desiredVelocity - _rigidbody.velocity)) / Time.fixedDeltaTime;	
 		
 		//Fight the gravity
 		//desiredForceToApply += -Physics.gravity * _rigidbody.mass;
+
+		//project the desired force onto the perpendicular plane
+		Vector3 normal = transform.forward;
+		Vector3 projectedDesiredForceToAply = desiredForceToApplyPerpendicular - Vector3.Dot(desiredForceToApplyPerpendicular, normal) * normal;
+
+		//Vvector v1_projected = v1 - Dot(v1, n) * n;
 		
-		//Clamp the total force to respect the the maxForce parameter.
-		forceToApply = Vector3.ClampMagnitude(desiredForceToApply, maxTotalForce);
+		//Clamp the total force to respect the the maxForce parameter once projected onto the plane.
+		forceToApplyPerpendicular = Vector3.ClampMagnitude(projectedDesiredForceToAply, maxTotalForcePerpendicular);
 	}
 
 	void rotateYaw ()
@@ -113,7 +152,7 @@ public class ShipController : MonoBehaviour {
 //				desiredWYaw = 0f;
 //			}
 //		}		
-		desiredWYaw = Input.GetAxis("Horizontal2") * maxWYaw;
+		desiredWYaw = Input.GetAxis("Horizontal") * maxWYaw;
 
 		
 		//I = m * r'2, T= I * alpha; Suposed r = 1;
@@ -130,7 +169,7 @@ public class ShipController : MonoBehaviour {
 		desiredWPitch = 0f;
 		
 		//Take the input to calculate desired velocity.
-		desiredWPitch = Input.GetAxis("Vertical2") * maxWPitch;
+		desiredWPitch = Input.GetAxis("Vertical") * maxWPitch;
 
 		//I = m * r'2, T= I * alpha; Suposed r = 1;
 		desiredTorqueToApplyPitch = ((desiredWPitch - transform.InverseTransformDirection(_rigidbody.angularVelocity).x)*0.1f/Time.fixedDeltaTime) * _rigidbody.mass;
