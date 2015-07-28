@@ -6,10 +6,16 @@ public class ShipController : MonoBehaviour {
 	Vector3 desiredVelocity = Vector3.zero;
 	Vector3 desiredForceToApply = Vector3.zero;
 	Vector3 forceToApplyLinear = Vector3.zero;
+	Vector3 lastForceToApplyLinear = Vector3.zero;
 
 	Vector3 desiredVelocityPerpendicular = Vector3.zero;
 	Vector3 desiredForceToApplyPerpendicular = Vector3.zero;
 	Vector3 forceToApplyPerpendicular = Vector3.zero;
+	Vector3 lastForceToApplyPerpendicular = Vector3.zero;
+
+
+	Vector3 smoothedForceToApplyPerpendicular = Vector3.zero;
+
 
 	public float maxVelocity = 5f;
 	public float maxVerticalVelocity = 1f;
@@ -17,6 +23,19 @@ public class ShipController : MonoBehaviour {
 
 	public float maxLinealForce = 5f;
 	public float maxTotalForcePerpendicular = 1f;
+
+
+	//Propellers: 0 - topLeft, 1 - topRight, 2 - bottomRight, 3 - bottomLeft
+	public GameObject[] propellers;
+
+	public float propellersApertureWidth;
+	public float propellersApertureHeight;
+
+	Vector3 topLeft = Vector3.zero;
+	Vector3 topRight = Vector3.zero;
+	Vector3 bottomRight = Vector3.zero;
+	Vector3 bottomLeft = Vector3.zero;
+
 
 	//----------------------------------
 
@@ -54,34 +73,49 @@ public class ShipController : MonoBehaviour {
 	
 	void Update () 
 	{
-		move ();
+		moveLinear ();
 		movePerpendicular ();
 		rotateYaw ();
 		rotatePitch ();
 		rotateRoll ();
 	}
 
+	void FixedUpdate ()
+	{
+		_rigidbody.AddForce(smoothedForceToApplyPerpendicular + forceToApplyLinear);
+
+		//_rigidbody.AddForce(forceToApplyLinear);
+		_rigidbody.AddRelativeTorque(Vector3.up * torqueToApplyYaw + Vector3.right * torqueToApplyPitch + Vector3.forward * torqueToApplyRoll);
+	}
+
 
 	void OnDrawGizmos ()
 	{
 		Gizmos.color = Color.blue;
-		Debug.DrawLine(transform.position, (transform.position + Vector3.right * forceToApplyPerpendicular.x/3000f + Vector3.forward * forceToApplyPerpendicular.z/3000f + Vector3.up * forceToApplyPerpendicular.y/3000f), Color.blue);
-		Gizmos.DrawWireSphere(transform.position, maxTotalForcePerpendicular/8000f);
+		//Debug.DrawLine(transform.position, (transform.position + Vector3.right * forceToApplyPerpendicular.x/3000f + Vector3.forward * forceToApplyPerpendicular.z/3000f + Vector3.up * forceToApplyPerpendicular.y/3000f), Color.blue);
+		Debug.DrawLine(transform.position, (transform.position + Vector3.right * smoothedForceToApplyPerpendicular.x/3000f + Vector3.forward * smoothedForceToApplyPerpendicular.z/3000f + Vector3.up * smoothedForceToApplyPerpendicular.y/3000f), Color.blue);
+
+		//Gizmos.DrawWireSphere(transform.position, maxTotalForcePerpendicular/8000f);
 
 		Gizmos.color = Color.red;
-		Debug.DrawLine(transform.position, (transform.position + forceToApplyLinear/5000f), Color.red);
-	
+		Debug.DrawLine(transform.position, (transform.position + forceToApplyLinear/5000f), Color.red);	
+		Gizmos.color = Color.yellow;
+		Debug.DrawLine(transform.position, (transform.position + topLeft/3000f), Color.yellow);
+		Debug.DrawLine(transform.position, (transform.position + topRight/3000f), Color.yellow);
+		Debug.DrawLine(transform.position, (transform.position + bottomLeft/3000f), Color.yellow);
+		Debug.DrawLine(transform.position, (transform.position + bottomRight/3000f), Color.yellow);
+
+
+
 	}
 
-	void FixedUpdate ()
-	{
-		_rigidbody.AddForce(forceToApplyPerpendicular + forceToApplyLinear);
-		_rigidbody.AddRelativeTorque(Vector3.up * torqueToApplyYaw + Vector3.right * torqueToApplyPitch + Vector3.forward * torqueToApplyRoll);
-	}
 
-	void move ()
+
+	void moveLinear ()
 	{
 		//Linear displacement ----------------
+
+		lastForceToApplyLinear = forceToApplyLinear;
 
 		forceToApplyLinear = Vector3.zero;
 		desiredForceToApply = Vector3.zero;
@@ -97,13 +131,20 @@ public class ShipController : MonoBehaviour {
 		//Clamp the total force to respect the the maxForce parameter once projected onto the plane.
 		forceToApplyLinear = Vector3.ClampMagnitude(desiredForceToApply, maxLinealForce);
 
+		if (Vector3.Dot( forceToApplyLinear, lastForceToApplyLinear) < 0f )
+		{
+			forceToApplyLinear = Vector3.zero;
+		}
+
 
 	}
 
 	void movePerpendicular ()
 	{
 		//Perpendicular displacement ----------------
-		
+
+		lastForceToApplyPerpendicular = forceToApplyPerpendicular;
+
 		forceToApplyPerpendicular = Vector3.zero;
 		desiredForceToApplyPerpendicular = Vector3.zero;
 		
@@ -127,8 +168,33 @@ public class ShipController : MonoBehaviour {
 
 		//Vvector v1_projected = v1 - Dot(v1, n) * n;
 		
-		//Clamp the total force to respect the the maxForce parameter once projected onto the plane.
+		//Clamp the total force to respect the the maxForce parameter once projected onto the plane.	
 		forceToApplyPerpendicular = Vector3.ClampMagnitude(projectedDesiredForceToAply, maxTotalForcePerpendicular);
+
+		if (Vector3.Dot( forceToApplyPerpendicular, lastForceToApplyPerpendicular) < 0f )
+		{
+			forceToApplyPerpendicular = Vector3.zero;
+		}
+
+		smoothedForceToApplyPerpendicular = Vector3.Lerp(smoothedForceToApplyPerpendicular, forceToApplyPerpendicular, Time.deltaTime * 5f);
+
+		distributeForceToPropellers ();
+
+	}
+
+	void distributeForceToPropellers ()
+	{
+		float magnitude = smoothedForceToApplyPerpendicular.magnitude / (float)propellers.Length;
+		Vector3 totalForceDir = smoothedForceToApplyPerpendicular.normalized;
+		Vector3 normalLongitudinal = transform.forward;
+		Vector3 normalTransversal = Vector3.Cross(normalLongitudinal, totalForceDir).normalized;
+
+
+		topLeft = -(totalForceDir * magnitude) + (normalLongitudinal * propellersApertureHeight) - (normalTransversal * propellersApertureWidth);
+		topRight = -(totalForceDir * magnitude) + (normalLongitudinal * propellersApertureHeight) + (normalTransversal * propellersApertureWidth);
+		bottomRight = -(totalForceDir * magnitude) - (normalLongitudinal * propellersApertureHeight) + (normalTransversal * propellersApertureWidth);
+		bottomLeft = -(totalForceDir * magnitude) - (normalLongitudinal * propellersApertureHeight) - (normalTransversal * propellersApertureWidth);
+
 	}
 
 	void rotateYaw ()
