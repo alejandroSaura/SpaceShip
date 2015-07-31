@@ -17,19 +17,19 @@ public class ShipController : MonoBehaviour {
 	Vector3 smoothedForceToApplyPerpendicular = Vector3.zero;
 
 
-	public float maxVelocity = 5f;
-	public float maxVerticalVelocity = 1f;
-	public float maxHorizontalVelocity = 1f;
+	public float maxVelocity = 40f;
+	public float maxVerticalVelocity = 20f;
+	public float maxHorizontalVelocity = 20f;
 
-	public float maxLinealForce = 5f;
-	public float maxTotalForcePerpendicular = 1f;
+	public float maxLinealForce = 30000f;
+	public float maxTotalForcePerpendicular = 50000f;
 
 
 	//Propellers: 0 - topLeft, 1 - topRight, 2 - bottomRight, 3 - bottomLeft
 	public GameObject[] propellers;
 
-	public float propellersApertureWidth;
-	public float propellersApertureHeight;
+	public float propellersApertureWidth = 1000f;
+	public float propellersApertureHeight = 1200f;
 
 	Vector3 topLeft = Vector3.zero;
 	Vector3 topRight = Vector3.zero;
@@ -43,8 +43,8 @@ public class ShipController : MonoBehaviour {
 	float desiredTorqueToApplyYaw = 0f;
 	float torqueToApplyYaw = 0f;
 
-	public float maxWYaw = 1f;
-	public float maxTorqueYaw = 1f;
+	public float maxWYaw = 2f;
+	public float maxTorqueYaw = 800f;
 
 	//----------------------------------
 
@@ -52,8 +52,8 @@ public class ShipController : MonoBehaviour {
 	float desiredTorqueToApplyPitch = 0f;
 	float torqueToApplyPitch = 0f;
 	
-	public float maxWPitch = 1f;
-	public float maxTorquePitch = 1f;
+	public float maxWPitch = 2f;
+	public float maxTorquePitch = 800f;
 
 	//----------------------------------
 
@@ -61,8 +61,8 @@ public class ShipController : MonoBehaviour {
 	float desiredTorqueToApplyRoll = 0f;
 	float torqueToApplyRoll = 0f;
 	
-	public float maxWRoll = 1f;
-	public float maxTorqueRoll = 1f;
+	public float maxWRoll = 2f;
+	public float maxTorqueRoll = 800f;
 
 	Rigidbody _rigidbody;
 
@@ -205,7 +205,7 @@ public class ShipController : MonoBehaviour {
 		desiredTorqueToApplyYaw = 0f;
 		desiredWYaw = 0f;
 		
-		//Take the input to calculate desired velocity.
+		//calculate desired velocity with RB and LB.
 //		if (Input.GetButton("RB") && !Input.GetButton("LB"))
 //		{
 //			desiredWYaw = maxWYaw;
@@ -217,7 +217,9 @@ public class ShipController : MonoBehaviour {
 //			{
 //				desiredWYaw = 0f;
 //			}
-//		}		
+//		}	
+
+
 		desiredWYaw = Input.GetAxis("Horizontal") * maxWYaw;
 
 		
@@ -243,7 +245,7 @@ public class ShipController : MonoBehaviour {
 		//Debug.Log (transform.InverseTransformDirection(_rigidbody.angularVelocity).x);
 	}
 
-	public void rotateRoll ()
+	void rotateRoll ()
 	{
 		//Roll (Z) Rotation ----------------
 		
@@ -254,6 +256,7 @@ public class ShipController : MonoBehaviour {
 		//Take the input to calculate desired velocity.
 		//desiredWRoll = Input.GetAxis("Horizontal2") * maxWRoll;
 
+		//calculate desired velocity with RB and LB
 		if (Input.GetButton("RB") && !Input.GetButton("LB"))
 		{
 			desiredWRoll = -maxWRoll;
@@ -266,6 +269,7 @@ public class ShipController : MonoBehaviour {
 				desiredWRoll = 0f;
 			}
 		}		
+		//desiredWRoll = -Input.GetAxis("Horizontal") * maxWRoll;
 		
 		//I = m * r'2, T= I * alpha; Suposed r = 1;
 		desiredTorqueToApplyRoll = ((desiredWRoll - transform.InverseTransformDirection(_rigidbody.angularVelocity).z)*0.1f/Time.fixedDeltaTime) * _rigidbody.mass;
